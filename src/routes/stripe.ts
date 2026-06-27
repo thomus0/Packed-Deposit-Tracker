@@ -26,17 +26,17 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object as Stripe.PaymentIntent;
-    const userId = intent.metadata?.user_id;
+    const userId = intent.metadata?.user_id ?? null;
     const amount = intent.amount / 100;
 
-    if (userId && amount > 0) {
+    if (amount > 0) {
       try {
         await pool.query(
           `INSERT INTO deposits (user_id, amount, payment_method, stripe_payment_intent_id)
            VALUES ($1, $2, 'stripe', $3)`,
           [userId, amount, intent.id]
         );
-        notifyDeposit(userId, amount).catch(console.error);
+        notifyDeposit(userId ?? intent.id, amount).catch(console.error);
       } catch (err) {
         console.error('[Stripe] Failed to record deposit:', err);
         return res.status(500).json({ error: 'Failed to record deposit' });

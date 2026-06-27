@@ -12,7 +12,7 @@ async function migrate() {
 
     CREATE TABLE IF NOT EXISTS deposits (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id),
+      user_id TEXT,
       amount NUMERIC(10,2) NOT NULL,
       payment_method TEXT DEFAULT 'stripe',
       stripe_payment_intent_id TEXT,
@@ -21,7 +21,7 @@ async function migrate() {
 
     CREATE TABLE IF NOT EXISTS withdrawals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id),
+      user_id TEXT,
       amount NUMERIC(10,2) NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
