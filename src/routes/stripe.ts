@@ -36,7 +36,8 @@ router.post('/webhook', async (req: Request, res: Response) => {
            VALUES ($1, $2, 'stripe', $3)`,
           [userId, amount, intent.id]
         );
-        notifyDeposit(userId ?? intent.id, amount).catch(console.error);
+        const username = intent.metadata?.username ?? intent.receipt_email ?? userId ?? 'Unknown';
+        notifyDeposit(username, amount, intent.id).catch(console.error);
       } catch (err) {
         console.error('[Stripe] Failed to record deposit:', err);
         return res.status(500).json({ error: 'Failed to record deposit' });
