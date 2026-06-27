@@ -3,14 +3,18 @@ import { pool } from './db';
 
 async function migrate() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
+    DROP TABLE IF EXISTS withdrawals;
+    DROP TABLE IF EXISTS deposits;
+    DROP TABLE IF EXISTS users;
+
+    CREATE TABLE users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       username TEXT,
       email TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS deposits (
+    CREATE TABLE deposits (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id TEXT,
       amount NUMERIC(10,2) NOT NULL,
@@ -19,7 +23,7 @@ async function migrate() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS withdrawals (
+    CREATE TABLE withdrawals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id TEXT,
       amount NUMERIC(10,2) NOT NULL,
