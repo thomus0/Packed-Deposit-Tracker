@@ -61,6 +61,32 @@ export async function notifyReturningUserDeposit(params: {
   }
 }
 
+export async function notifyWithdrawal(params: {
+  amount: number;
+  username: string;
+  totalDeposits: number;
+  totalWithdrawals: number;
+}): Promise<void> {
+  const slack = getClient();
+  const channel = process.env.SLACK_DEPOSIT_CHANNEL_ID;
+  if (!slack || !channel) return;
+
+  try {
+    await slack.chat.postMessage({
+      channel,
+      mrkdwn: true,
+      text: [
+        `📉 ${fmt(params.amount)} withdrawal`,
+        `🙋‍♂️ @${params.username}`,
+        `🏦 ${fmt(params.totalDeposits)} total deposits`,
+        `📛 ${fmt(params.totalWithdrawals)} total withdrawals`,
+      ].join('\n'),
+    });
+  } catch (err) {
+    console.error('[Slack] notifyWithdrawal failed:', err);
+  }
+}
+
 export async function sendStatsMessage(channelId: string, days: number, stats: {
   newUsers: number;
   firstTimePayingUsers: number;

@@ -3,6 +3,7 @@ import express from 'express';
 import { pool } from './db/db';
 import stripeRouter from './routes/stripe';
 import slackCommandsRouter from './routes/slackCommands';
+import withdrawalsRouter from './routes/withdrawals';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -20,6 +21,7 @@ app.use(express.json());
 
 app.use('/stripe', stripeRouter);
 app.use('/slack/commands', slackCommandsRouter);
+app.use('/withdrawals', withdrawalsRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
