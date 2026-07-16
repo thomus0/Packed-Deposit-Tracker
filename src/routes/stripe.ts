@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { pool } from '../db/db';
 import { notifyDeposit } from '../services/depositNotifier';
+import { notifyWithdrawal } from '../services/slackService';
 
 const router = Router();
 
@@ -42,6 +43,33 @@ router.post('/webhook', async (req: Request, res: Response) => {
         console.error('[Stripe] Failed to record deposit:', err);
         return res.status(500).json({ error: 'Failed to record deposit' });
       }
+    }
+  }
+
+  if (event.type === 'payout.created') {
+    const payout = event.data.object as Stripe.Payout;
+    const amount = payout.amount / 100;
+    const userId = (payout.metadata as Record<string, string>)?.user_id ?? 'unknown';
+    const username = (payout.metadata as Record<string, string>)?.username ?? userId;
+
+    try {
+      await pool.query(
+        'INSERT INTO withdrawals (user_id, amount) VALUES ($1, $2)',
+        [userId, amount]
+      );
+
+      const [depositsResult, withdrawalsResult] = await Promise.all([
+        pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE user_id = $1', [userId]),
+        pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM withdrawals WHERE user_id = $1', [userId]),
+      ]);
+
+      const totalDeposits = parseFloat(depositsResult.rows[0].total);
+      const totalWithdrawals = parseFloat(withdrawalsResult.rows[0].total);
+
+      notifyWithdrawal({ amount, username, totalDeposits, totalWithdrawals }).catch(console.error);
+    } catch (err) {
+      console.error('[Stripe] Failed to record payout:', err);
+      return res.status(500).json({ error: 'Failed to record payout' });
     }
   }
 
