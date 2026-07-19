@@ -75,8 +75,18 @@ router.post('/webhook', async (req: Request, res: Response) => {
     const payout = event.data.object as Stripe.Payout;
     const amount = payout.amount / 100;
     const connectedAccountId = (event as any).account as string ?? 'unknown';
-    const username = (payout.metadata as Record<string, string>)?.username ?? connectedAccountId;
-    const userId = (payout.metadata as Record<string, string>)?.user_id ?? connectedAccountId;
+
+    // Look up user_id from the most recent transfer to this connected account
+    let userId = (payout.metadata as Record<string, string>)?.user_id ?? null;
+    if (!userId) {
+      try {
+        const transfers = await stripe.transfers.list({ destination: connectedAccountId, limit: 1 });
+        userId = transfers.data[0]?.metadata?.user_id ?? connectedAccountId;
+      } catch {
+        userId = connectedAccountId;
+      }
+    }
+    const username = userId;
 
     try {
       await pool.query(
