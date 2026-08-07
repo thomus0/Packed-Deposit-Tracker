@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import { pool } from '../db/db';
+import { computeStats } from '../services/statsService';
 import { sendStatsMessage } from '../services/slackService';
 
 const router = Router();
@@ -44,55 +44,18 @@ router.post('/', async (req: Request, res: Response) => {
 
   if (command === '/stats') {
     const days = Math.max(1, parseInt(text?.trim()) || 1);
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const period = days === 1 ? 'last 24 hours' : `last ${days} days`;
 
     // Acknowledge immediately — Slack times out after 3 seconds
     res.json({
       response_type: 'in_channel',
-      text: `⏳ Pulling stats for the last ${days * 24} hours...`,
+      text: `⏳ Pulling stats for the ${period}...`,
     });
 
     try {
-      const [depositsResult, withdrawalsResult, newUsersResult] = await Promise.all([
-        pool.query('SELECT user_id, amount FROM deposits WHERE created_at >= $1', [since]),
-        pool.query('SELECT amount FROM withdrawals WHERE created_at >= $1', [since]),
-        pool.query('SELECT id FROM users WHERE created_at >= $1', [since]),
-      ]);
-
-      const deposits = depositsResult.rows;
-      const withdrawals = withdrawalsResult.rows;
-
-      const depositCount = deposits.length;
-      const totalDeposits = deposits.reduce((s: number, d: { amount: string }) => s + parseFloat(d.amount), 0);
-      const avgDeposit = depositCount > 0 ? totalDeposits / depositCount : 0;
-      const totalWithdrawals = withdrawals.reduce((s: number, w: { amount: string }) => s + parseFloat(w.amount), 0);
-      const cashflow = totalDeposits - totalWithdrawals;
-
-      // First-time paying users: users whose very first deposit is within the window
-      const uniqueUserIds = [...new Set(deposits.map((d: { user_id: string }) => d.user_id))];
-      let firstTimePayingUsers = 0;
-
-      if (uniqueUserIds.length > 0) {
-        const firstDepositsResult = await pool.query(
-          `SELECT user_id, MIN(created_at) as first_deposit
-           FROM deposits
-           WHERE user_id = ANY($1)
-           GROUP BY user_id
-           HAVING MIN(created_at) >= $2`,
-          [uniqueUserIds, since]
-        );
-        firstTimePayingUsers = firstDepositsResult.rows.length;
-      }
-
-      await sendStatsMessage(channel_id, days, {
-        newUsers: newUsersResult.rows.length,
-        firstTimePayingUsers,
-        totalDeposits,
-        depositCount,
-        avgDeposit,
-        cashflow,
-        totalWithdrawals,
-      });
+      const stats = await computeStats(since);
+      await sendStatsMessage(channel_id, days, stats);
     } catch (err) {
       console.error('[SlackCommands] /stats error:', err);
     }
