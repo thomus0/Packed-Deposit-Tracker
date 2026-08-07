@@ -5,9 +5,12 @@ import { sendStatsMessage } from '../services/slackService';
 
 const router = Router();
 
-function verifySlackSignature(req: Request): boolean {
+export function verifySlackSignature(req: Request): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
-  if (!signingSecret) return true;
+  if (!signingSecret) {
+    console.error('[SlackCommands] SLACK_SIGNING_SECRET is not set — rejecting request');
+    return false;
+  }
 
   const timestamp = req.headers['x-slack-request-timestamp'] as string;
   const slackSig = req.headers['x-slack-signature'] as string;
@@ -18,9 +21,14 @@ function verifySlackSignature(req: Request): boolean {
   const baseString = `v0:${timestamp}:${(req as Request & { rawBody?: string }).rawBody ?? ''}`;
   const hmac = crypto.createHmac('sha256', signingSecret);
   hmac.update(baseString);
-  const computed = `v0=${hmac.digest('hex')}`;
+  const computed = Buffer.from(`v0=${hmac.digest('hex')}`);
+  const provided = Buffer.from(slackSig);
 
-  return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(slackSig));
+  // timingSafeEqual throws on a length mismatch, so screen that out first. Valid
+  // signatures are always the same length, so this leaks nothing useful.
+  if (computed.length !== provided.length) return false;
+
+  return crypto.timingSafeEqual(computed, provided);
 }
 
 router.post('/', async (req: Request, res: Response) => {
