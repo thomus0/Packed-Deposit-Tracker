@@ -57,22 +57,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     if (amount > 0) {
       try {
-        const inserted = await pool.query(
+        await pool.query(
           `INSERT INTO deposits (user_id, amount, payment_method, stripe_payment_intent_id)
-           VALUES ($1, $2, 'stripe', $3)
-           ON CONFLICT (stripe_payment_intent_id) DO NOTHING
-           RETURNING id`,
+           VALUES ($1, $2, 'stripe', $3)`,
           [userId, amount, intent.id]
         );
-
-        // Stripe retries until it gets a 2xx, so the same intent can arrive more
-        // than once. Ack the redelivery, but don't record or announce it twice.
-        if (inserted.rowCount === 0) {
-          console.log(`[Stripe] Ignoring redelivered payment intent ${intent.id}`);
-        } else {
-          const username = intent.metadata?.username ?? intent.receipt_email ?? userId ?? 'Unknown';
-          notifyDeposit(username, amount, intent.id).catch(console.error);
-        }
+        const username = intent.metadata?.username ?? intent.receipt_email ?? userId ?? 'Unknown';
+        notifyDeposit(username, amount, intent.id).catch(console.error);
       } catch (err) {
         console.error('[Stripe] Failed to record deposit:', err);
         return res.status(500).json({ error: 'Failed to record deposit' });

@@ -1,5 +1,4 @@
 import { WebClient } from '@slack/web-api';
-import type { Stats } from './statsService';
 
 let client: WebClient | null = null;
 
@@ -11,10 +10,6 @@ function getClient(): WebClient | null {
 
 function fmt(amount: number): string {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
-
-function count(value: number): string {
-  return value.toLocaleString('en-US');
 }
 
 export async function notifyNewUserDeposit(params: {
@@ -92,46 +87,34 @@ export async function notifyWithdrawal(params: {
   }
 }
 
-export function formatStatsMessage(days: number, stats: Stats): string {
-  const period = days === 1 ? 'last 24 hours' : `last ${days} days`;
-
-  return [
-    `\uD83C\uDFC6 *Packed Stats* \u2014 ${period}`,
-    ``,
-    `\uD83C\uDFE6 Total Deposits: *${fmt(stats.totalDeposits)}*`,
-    `\u270C\uD83C\uDFFB Total Withdrawals: *${fmt(stats.totalWithdrawals)}*`,
-    `\uD83E\uDD11 Cashflow: *${fmt(stats.cashflow)}*`,
-    ``,
-    `*\uD83C\uDFE7 Deposits*`,
-    `#\uFE0F\u20E3 Count: *${count(stats.depositCount)}*`,
-    `\uD83E\uDDEE Average: *${fmt(stats.avgDeposit)}*`,
-    `\uD83D\uDCCA Median: *${fmt(stats.medianDeposit)}*`,
-    `\uD83D\uDD1D Largest: *${fmt(stats.largestDeposit)}*`,
-    ``,
-    `*\uD83D\uDCC9 Withdrawals*`,
-    `#\uFE0F\u20E3 Count: *${count(stats.withdrawalCount)}*`,
-    `\uD83E\uDDEE Average: *${fmt(stats.avgWithdrawal)}*`,
-    ``,
-    `*\uD83D\uDC65 People*`,
-    `\uD83D\uDE4B Unique Depositors: *${count(stats.uniqueDepositors)}*`,
-    `\uD83E\uDD29 First-Time Payers: *${count(stats.firstTimePayingUsers)}*`,
-    `\uD83D\uDD01 Repeat Rate: *${Math.round(stats.repeatRate * 100)}%*`,
-  ].join('\n');
-}
-
-export async function sendStatsMessage(
-  channelId: string,
-  days: number,
-  stats: Stats
-): Promise<void> {
+export async function sendStatsMessage(channelId: string, days: number, stats: {
+  newUsers: number;
+  firstTimePayingUsers: number;
+  totalDeposits: number;
+  depositCount: number;
+  avgDeposit: number;
+  cashflow: number;
+  totalWithdrawals: number;
+}): Promise<void> {
   const slack = getClient();
   if (!slack) return;
+
+  const period = days === 1 ? 'last 24 hours' : `last ${days * 24} hours`;
 
   try {
     await slack.chat.postMessage({
       channel: channelId,
       mrkdwn: true,
-      text: formatStatsMessage(days, stats),
+      text: [
+        `🏆 *Packed Stats* (${period}):`,
+        `👥 New Users: *${stats.newUsers}*`,
+        `🤩 First Time Paying Users: *${stats.firstTimePayingUsers}*`,
+        `🏦 Total Deposits: *${fmt(stats.totalDeposits)}*`,
+        `🏧 Number of Deposits: *${stats.depositCount}*`,
+        `🧮 Avg Deposit: *${fmt(stats.avgDeposit)}*`,
+        `🤑 Cashflow: *${fmt(stats.cashflow)}*`,
+        `✌🏻 Total Withdrawals: *${fmt(stats.totalWithdrawals)}*`,
+      ].join('\n'),
     });
   } catch (err) {
     console.error('[Slack] sendStatsMessage failed:', err);
