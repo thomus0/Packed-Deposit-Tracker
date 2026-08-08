@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/index.js",
+    "start": "node dist/db/migrate.js && node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "migrate": "ts-node-dev --transpile-only src/db/migrate.ts",
     "test": "node --test --test-concurrency=1 --require ts-node/register/transpile-only --require ./src/__tests__/setup.ts \"src/__tests__/**/*.test.ts\"",
