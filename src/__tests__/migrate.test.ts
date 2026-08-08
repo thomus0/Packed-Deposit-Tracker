@@ -78,6 +78,40 @@ test('leaves rows without a payment intent id untouched', async () => {
   assert.equal(result.rowCount, 2, 'NULL intent ids are not duplicates of each other');
 });
 
+test('upgrades a legacy schema so the deposit webhook can insert', async () => {
+  // The schema production was actually running: tables from the original
+  // migration, with no unique index on stripe_payment_intent_id.
+  await pool.query('DROP TABLE IF EXISTS withdrawals, deposits, users');
+  await pool.query(`
+    CREATE TABLE deposits (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT,
+      amount NUMERIC(10,2) NOT NULL,
+      payment_method TEXT DEFAULT 'stripe',
+      stripe_payment_intent_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // The INSERT in routes/stripe.ts, verbatim. Without the index Postgres
+  // raises 42P10 and every deposit webhook 500s.
+  const depositInsert = `INSERT INTO deposits (user_id, amount, payment_method, stripe_payment_intent_id)
+     VALUES ($1, $2, 'stripe', $3)
+     ON CONFLICT (stripe_payment_intent_id) DO NOTHING
+     RETURNING id`;
+
+  await assert.rejects(
+    () => pool.query(depositInsert, ['user-legacy', 25.0, 'pi_legacy']),
+    /no unique or exclusion constraint/,
+    'precondition: the legacy schema cannot serve this INSERT'
+  );
+
+  await migrate();
+
+  const inserted = await pool.query(depositInsert, ['user-legacy', 25.0, 'pi_legacy']);
+  assert.equal(inserted.rowCount, 1, 'migrate() must supply the index the webhook depends on');
+});
+
 test('preserves existing rows when re-run', async () => {
   await migrate();
   await pool.query(
